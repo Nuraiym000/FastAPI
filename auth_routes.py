@@ -21,7 +21,7 @@ async def hello(Authorize:AuthJWT=Depends()):
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid Token"
-         )
+        )
     return {"message": "Hello World"}
 
 @auth_router.post('/signup',
