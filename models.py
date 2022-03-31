@@ -21,7 +21,7 @@ class Order(Base):
 
     ORDER_STATUSES = (
         ('PENDING', 'pending'),
-        ('IN_TRANSIT', 'in-transit'),
+        ('IN-TRANSIT', 'in-transit'),
         ('DELIVERED', 'delivered')
     )
 
