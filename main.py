@@ -1,14 +1,72 @@
-from path import Path
-from fastapi import FastAPI
+from celery import Celery
+
 from auth_routes import auth_router
 from order_routes import order_router
 from fastapi_jwt_auth import AuthJWT
 from schemas import Settings
 import uvicorn
-from fastapi import FastAPI, BackgroundTasks
+from fastapi import FastAPI
+import inspect, re
+from fastapi.routing import APIRoute
+from fastapi.openapi.utils import get_openapi
 
 
 app = FastAPI()
+
+# celery = Celery(
+#     __name__,
+#     broker="redis://127.0.0.1:6379/0",
+#     backend="redis://127.0.0.1:6379/0"
+# )
+
+
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+
+    openapi_schema = get_openapi(
+        title = "Pizza Delivery API",
+        version = "1.0",
+        description = "An API for a Pizza Delivery Service",
+        routes = app.routes,
+    )
+
+    openapi_schema["components"]["securitySchemes"] = {
+        "Bearer Auth": {
+            "type": "apiKey",
+            "in": "header",
+            "name": "Authorization",
+            "description": "Enter: **'Bearer &lt;JWT&gt;'**, where JWT is the access token"
+        }
+    }
+
+    # Get all routes where jwt_optional() or jwt_required
+    api_router = [route for route in app.routes if isinstance(route, APIRoute)]
+
+    for route in api_router:
+        path = getattr(route, "path")
+        endpoint = getattr(route,"endpoint")
+        methods = [method.lower() for method in getattr(route, "methods")]
+
+        for method in methods:
+            # access_token
+            if (
+                re.search("jwt_required", inspect.getsource(endpoint)) or
+                re.search("fresh_jwt_required", inspect.getsource(endpoint)) or
+                re.search("jwt_optional", inspect.getsource(endpoint))
+            ):
+                openapi_schema["paths"][path][method]["security"] = [
+                    {
+                        "Bearer Auth": []
+                    }
+                ]
+
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+
+app.openapi = custom_openapi
+
 
 @AuthJWT.load_config
 def get_config():
@@ -18,27 +76,15 @@ def get_config():
 app.include_router(auth_router)
 app.include_router(order_router)
 
-
-# app = FastAPI(title='How to Send Email')
 @app.get('/')
 def index():
     return 'Hello World'
 
-# if name == '__main__':
-#     uvicorn.run('main:app', reload=True)
+# @app.task('/')
+# def index():
+#     return 'Hello World'
 
 
-# @app.get('/send-email/asynchronous')
-# async def send_email_asynchronous():
-#     await send_email_async('Hello World','nurajymmm1@gmail.com',
-#     {'title': 'Hello World', 'name': 'Nura'})
-#     return 'Success'
-#
-# @app.get('/send-email/backgroundtasks')
-# def send_email_backgroundtasks(background_tasks: BackgroundTasks):
-#     send_email_background(background_tasks, 'Hello World',
-#     'someemail@gmail.com', {'title': 'Hello World', 'name':       'John Doe'})
-#     return 'Success'
-#
 if __name__ == '__main__':
     uvicorn.run('main:app', reload=True)
+
